@@ -7,6 +7,11 @@ public class Launcher {
         // get matrix
 
         // create RoutingNode
+        RoutingNode router = new RoutingNode();
+        VirtualNode vNode = new VirtualNode();
+
+        router.start();
+        vNode.start();
 
         // create N Virtual node
 
