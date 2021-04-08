@@ -14,7 +14,6 @@ public class RoutingTable {
     }
 
     private void initTable(String[] neighbours) {
-
         for (int i = 0; i < neighbours.length; i++) {
             if (neighbours[i].charAt(0) == '1') {
                 this.table.add(new Route(i, 1, i));

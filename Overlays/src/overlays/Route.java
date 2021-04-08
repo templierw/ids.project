@@ -9,7 +9,7 @@ public class Route {
     public Route(int to, int nbHop, int gate) {
         this.to = to;
         this.nbHop = nbHop;
-        this.gate = gate;
+        this.gate = gate; // neighbour with shortest route
     }
 
     public String toString() {

@@ -1,8 +1,5 @@
 package overlays;
 
-
-import java.util.Scanner;
-
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
@@ -50,9 +47,9 @@ public class PhysicalNode extends Thread{
 
             if (msg[0].compareTo("table") == 0) {
                 Route r = new Route(
-                    Integer.parseInt(msg[1]),
-                    Integer.parseInt(msg[2]),
-                    Integer.parseInt(msg[3])
+                    Integer.parseInt(msg[1]), // to
+                    Integer.parseInt(msg[2]), // nbHop
+                    Integer.parseInt(msg[3])  // gate
                 );
                 if (this.id != r.to) // don't need the route to get to myself ...
                     if (this.table.updateTable(r)) // flood only if new
@@ -61,6 +58,7 @@ public class PhysicalNode extends Thread{
 
             if (msg[0].compareTo("msg") == 0) {
                 int to = Integer.parseInt(msg[1]);
+                System.out.println("[" + this.id + "received " + msg[3] + " from " + msg[2]);
 
                 if (to == this.id) {
                     System.out.println("[" + this.id + "received " + msg[3] + " from " + msg[2]);
@@ -75,14 +73,14 @@ public class PhysicalNode extends Thread{
         try {
             channel.basicConsume(this.queueName, true, deliverCallback, consumerTag -> { });
             
-            if (ready && this.id == 0) {
+            /*if (ready && this.id == 0) {
                 Scanner s = new Scanner(System.in);
                 String msg[];
                 
                     System.out.print(">> ");
                     msg = s.nextLine().split(" ");
                     this.send(msg[1], Integer.parseInt(msg[0]), this.id);
-            }
+            }*/
                 
             //s.close();
 
@@ -117,14 +115,13 @@ public class PhysicalNode extends Thread{
     }
 
     public void send(String msg, int to, int from) {
-        this.table.printTable();
         Route nextHop = this.table.getRouteTo(to);
 
         int gate;
         if (nextHop == null)
             gate = 1;
 
-        gate = nextHop.gate;
+        else gate = nextHop.gate;
 
         msg = "msg:" + to + ":" + from + ":" + msg;
 
