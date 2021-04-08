@@ -1,7 +1,7 @@
 package overlays;
 
-import java.io.IOException;
-import java.util.LinkedList;
+
+import java.util.Scanner;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
@@ -14,19 +14,15 @@ public class PhysicalNode extends Thread{
 
     public int id;
     public RoutingTable table;
-    public int nbNodes;
-    public LinkedList<Integer> neighbours;
-
-
     private Channel channel;
     private String queueName;
-    public boolean isDone;
+
+    public boolean ready;
 
     public PhysicalNode(int id, String[] neighbours) {
         
         this.id = id;
         this.table = new RoutingTable(id, neighbours);
-        this.neighbours = this.table.getNeighbours();
 
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
@@ -46,7 +42,7 @@ public class PhysicalNode extends Thread{
 
     public void run() {
 
-        this.broadcast(); // flood with your initial info
+        this.gossip(); // flood with your initial info
         
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
 
@@ -60,12 +56,35 @@ public class PhysicalNode extends Thread{
                 );
                 if (this.id != r.to) // don't need the route to get to myself ...
                     if (this.table.updateTable(r)) // flood only if new
-                        this.broadcast();
+                        this.gossip();
+            }
+
+            if (msg[0].compareTo("msg") == 0) {
+                int to = Integer.parseInt(msg[1]);
+
+                if (to == this.id) {
+                    System.out.println("[" + this.id + "received " + msg[3] + " from " + msg[2]);
+                
+                } else {
+                    System.out.println("routing " + msg[3] + " from " + msg[2] + " to " + to);
+                    this.send(msg[3], to, Integer.parseInt(msg[2]));
+                }
             }
         };
 
         try {
             channel.basicConsume(this.queueName, true, deliverCallback, consumerTag -> { });
+            
+            if (ready && this.id == 0) {
+                Scanner s = new Scanner(System.in);
+                String msg[];
+                
+                    System.out.print(">> ");
+                    msg = s.nextLine().split(" ");
+                    this.send(msg[1], Integer.parseInt(msg[0]), this.id);
+            }
+                
+            //s.close();
 
         } catch (Exception e) {
             System.err.println("lalaAn error occured... Program exiting");
@@ -73,19 +92,47 @@ public class PhysicalNode extends Thread{
         }
     }
 
-    private void broadcast() {
-        for (Integer n : this.neighbours) {
+    private void gossip() {
+        for (Integer n : this.table.getNeighbours()) {
             for (Route r : this.table.table) {
                 if (n != r.to) {
                     String msg = "table:" + r.to + ":" + r.nbHop + ":" + this.id;
                     
                     try {
                         channel.basicPublish(EXCHANGE_NAME, "link" + n, null, msg.getBytes());
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
             }
         }
+    }
+
+    public void close() {
+        try {
+            this.channel.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } 
+    }
+
+    public void send(String msg, int to, int from) {
+        this.table.printTable();
+        Route nextHop = this.table.getRouteTo(to);
+
+        int gate;
+        if (nextHop == null)
+            gate = 1;
+
+        gate = nextHop.gate;
+
+        msg = "msg:" + to + ":" + from + ":" + msg;
+
+        try {
+            channel.basicPublish(EXCHANGE_NAME, "link" + gate, null, msg.getBytes());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
     }
 }

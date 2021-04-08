@@ -34,8 +34,12 @@ public class Launcher {
         Thread.sleep(2000);
 
         for (PhysicalNode n : nodes){
-            n.table.printTable();
+            n.ready = true;
         }
+
+        /*for (PhysicalNode n : nodes){
+            n.table.printTable();
+        }*/
             
 
 
