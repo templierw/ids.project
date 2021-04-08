@@ -2,7 +2,6 @@ package overlays;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.util.LinkedList;
 import java.util.Scanner;
 
 public class Launcher {
@@ -62,25 +61,6 @@ public class Launcher {
             }
 
         }
-
-        // for (PhysicalNode n : nodes){
-        //     n.start();
-        //     n.join();
-        // }
-
-        // Thread.sleep(2000);
-
-        // /*for (PhysicalNode n : nodes){
-        //     n.ready = true;
-        // }*/
-
-        // for (PhysicalNode n : nodes){
-        //     n.table.printTable();
-        // }
-            
-
-
-        //System.exit(0);
-
+        s.close();
     }
 }
