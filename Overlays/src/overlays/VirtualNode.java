@@ -19,10 +19,22 @@ public class VirtualNode extends Thread{
     }
 
     public void sendLeft(String message) {
-        this.physLayer.send(message, this.leftNeighbour, this.id);
+        try {
+            this.physLayer.send(message, this.leftNeighbour, this.id);
+        } catch (RouteException e) {
+            System.err.println(e.getMessage());
+        }
     }
 
     public void sendRight(String message){
-        this.physLayer.send(message, this.rightNeighbour, this.id);
+        try {
+            this.physLayer.send(message, this.rightNeighbour, this.id);
+        } catch (RouteException e) {
+            System.err.println(e.getMessage());
+        }
+    }
+
+    public void close() {
+        this.physLayer.close();
     }
 }

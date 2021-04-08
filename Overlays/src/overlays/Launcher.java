@@ -9,27 +9,23 @@ public class Launcher {
 
         Scanner s = new Scanner(System.in);
 
-        String[] inputP;
-        String currentPLine;
-
         VirtualNode myNode = null;
         
         int id = Integer.parseInt(args[1]);
         try {
-            BufferedReader physReader = new BufferedReader(new FileReader("./config/" + args[0] + ".txt"));
+            BufferedReader physReader = new BufferedReader(
+                    new FileReader("./config/" + args[0] + ".txt")
+                );
 
             int i = 0;
             while(i++ < id) 
                 physReader.readLine();
 
-            currentPLine = physReader.readLine();
-            inputP = currentPLine.split(":");
-
-          
-            myNode = new VirtualNode(id, inputP);
+            myNode = new VirtualNode(
+                            id, physReader.readLine().split(":")
+                            );
         
             physReader.close();
-
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -62,5 +58,9 @@ public class Launcher {
 
         }
         s.close();
+        myNode.close();
+        myNode.join();
+
+        System.exit(1);
     }
 }

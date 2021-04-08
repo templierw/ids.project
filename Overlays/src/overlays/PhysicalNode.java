@@ -3,6 +3,7 @@ package overlays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
@@ -20,6 +21,8 @@ public class PhysicalNode extends Thread{
 
     private ExecutorService services;
     static private Semaphore mustGossip;
+
+    private AtomicBoolean exit = new AtomicBoolean(false);
 
     public PhysicalNode(int id, String[] neighbours) {
         
@@ -52,10 +55,12 @@ public class PhysicalNode extends Thread{
         services.execute(new Runnable() {  
             public void run() { 
                 try {
-                    while(true) {
+                    boolean loop = true;
+                    while(loop) {
                         mustGossip.acquire();
-                        System.out.println("gossiping");
-                        gossip(); // flood with your initial info
+                        if (!exit.get())
+                            gossip();
+                        loop = !exit.get();
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -65,6 +70,8 @@ public class PhysicalNode extends Thread{
 
         this.services.execute(new Runnable() {  
             public void run() {  
+
+
                 DeliverCallback deliverCallback = (consumerTag, delivery) -> {
 
                     String[] msg = new String(delivery.getBody(), "UTF-8").split(":");
@@ -94,7 +101,11 @@ public class PhysicalNode extends Thread{
                         
                         } else {
                             System.out.println("routing " + msg[3] + " from " + msg[2] + " to " + to);
-                            send(msg[3], to, Integer.parseInt(msg[2]));
+                            try {
+                                send(msg[3], to, Integer.parseInt(msg[2]));
+                            } catch (RouteException e) {
+                                System.err.println(e.getMessage());
+                            }
                         }
                     }
                 };
@@ -107,10 +118,8 @@ public class PhysicalNode extends Thread{
                     System.err.println("lalaAn error occured... Program exiting");
                     System.exit(1);
                 }
-                  
             }  
         });
-        
     }
 
     private void gossip() { 
@@ -144,27 +153,28 @@ public class PhysicalNode extends Thread{
 
     public void close() {
         try {
+            exit.set(true);
             this.channel.close();
+            this.services.shutdown();
         } catch (Exception e) {
             e.printStackTrace();
         } 
     }
 
-    public void send(String msg, int to, int from) {
-        services.execute(new Runnable() {
+    public void send(String msg, int to, int from) throws RouteException {
+
+        if (!table.hasRouteTo(to))
+            throw new RouteException("Table [" + id + "] has no route to <" + to + ">");
+
+        else services.execute(new Runnable() {
             public void run() {
+
                 Route nextHop = table.getRouteTo(to);
-        
-                int gate;
-                if (nextHop == null)
-                    gate = 1;
-        
-                else gate = nextHop.gate;
         
                 String toSend = "msg:" + to + ":" + from + ":" + msg;
         
                 try {
-                    channel.basicPublish(EXCHANGE_NAME, "link" + gate, null, toSend.getBytes());
+                    channel.basicPublish(EXCHANGE_NAME, "link" + nextHop.gate, null, toSend.getBytes());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
