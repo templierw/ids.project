@@ -5,17 +5,17 @@ public class VirtualNode extends Thread{
     private int id;
     private int leftNeighbour;
     private int rightNeighbour;
-    private PhysicalNode physLayer;
+    public PhysicalNode physLayer;
 
-    public VirtualNode(int id, String[] virtNeigh, String[] physNeigh) {
+    public VirtualNode(int id, String[] physNeigh) {
 
         this.id = id;
-        int n = virtNeigh.length;
+        int n = physNeigh.length;
         this.rightNeighbour = (id + 1) % n;
         this.leftNeighbour = (n + id - 1) % n; // Assuming clockwise and increasing indexing (0, 1, .., N)
         this.physLayer = new PhysicalNode(id, physNeigh);
+        this.physLayer.start();
 
-        System.out.println(this.id + " left=" + this.leftNeighbour + " | right=" + this.rightNeighbour);
     }
 
     public void sendLeft(String message) {

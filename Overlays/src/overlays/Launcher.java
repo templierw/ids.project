@@ -8,34 +8,27 @@ import java.util.Scanner;
 public class Launcher {
     public static void main(String[] args) throws Exception {
 
-        LinkedList<VirtualNode> nodes = new LinkedList<>();
         Scanner s = new Scanner(System.in);
 
-        String[] inputV, inputP;
-        String currentVLine,
-               currentPLine;
+        String[] inputP;
+        String currentPLine;
 
         VirtualNode myNode = null;
         
-        int id = Integer.parseInt(args[2]);
+        int id = Integer.parseInt(args[1]);
         try {
-            BufferedReader virtReader = new BufferedReader(new FileReader("./config/" + args[0] + ".txt"));
-            BufferedReader physReader = new BufferedReader(new FileReader("./config/" + args[1] + ".txt"));
+            BufferedReader physReader = new BufferedReader(new FileReader("./config/" + args[0] + ".txt"));
 
             int i = 0;
-            while(i++ < id) {
-                virtReader.readLine();
+            while(i++ < id) 
                 physReader.readLine();
-            }
-            currentVLine = virtReader.readLine();
+
             currentPLine = physReader.readLine();
-            inputV = currentVLine.split(":");
             inputP = currentPLine.split(":");
 
           
-            myNode = new VirtualNode(id, inputV, inputP);
+            myNode = new VirtualNode(id, inputP);
         
-            virtReader.close();
             physReader.close();
 
 
@@ -48,7 +41,6 @@ public class Launcher {
         while (loop) {
             System.out.print("#~~>> ");
             cmd = s.nextLine().split(" ");
-            System.out.println(cmd[0]);
 
             if (cmd[0].compareTo("sendl") == 0) {
                 myNode.sendLeft(cmd[1]);
@@ -61,6 +53,9 @@ public class Launcher {
             else if (cmd[0].compareTo("--exit") == 0) {
                 loop = false;
             }
+
+            else if (cmd[0].compareTo("table") == 0)
+                myNode.physLayer.table.printTable();
 
             else {
                 System.out.println("Unknown commmand <" + cmd[0] + ">");
