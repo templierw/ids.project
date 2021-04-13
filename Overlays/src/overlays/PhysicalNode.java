@@ -23,11 +23,13 @@ public class PhysicalNode extends Thread{
     private String queueName;
 
     private ExecutorService services;
-    static private Semaphore mustGossip;
+    private Semaphore mustGossip;
 
     private AtomicBoolean exit = new AtomicBoolean(false);
 
-    public PhysicalNode(int id, String[] neighbours) {
+    MessageBuffer upBuff, downBuff;
+
+    public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, MessageBuffer downBuff) {
         
         this.id = id;
         this.table = new RoutingTable(id, neighbours);
@@ -35,8 +37,11 @@ public class PhysicalNode extends Thread{
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
 
-        this.services = Executors.newFixedThreadPool(3);
+        this.services = Executors.newFixedThreadPool(4);
         mustGossip = new Semaphore(0);
+
+        this.upBuff = upBuff;
+        this.downBuff = downBuff;
 
         try {
             this.channel = factory.newConnection().createChannel();
@@ -71,6 +76,17 @@ public class PhysicalNode extends Thread{
             }
         });
 
+        services.execute(new Runnable() {  
+            public void run() {
+                while(true)
+                    try {
+                        send(downBuff.getMessage());
+                    } catch (RouteException e) {
+                        e.printStackTrace();
+                    }
+            }
+        });
+
         this.services.execute(new Runnable() {  
             public void run() {  
 
@@ -95,9 +111,11 @@ public class PhysicalNode extends Thread{
 
                             case MSG:                
                                 if (recvPck.to == id)
-                                    System.out.println(
+                                    upBuff.putMessage(recvPck);
+                        
+                                    /*System.out.println(
                                         "[" + id + "]" + "received " + recvPck.msg + " from " + recvPck.from
-                                    );
+                                    );*/
                                 
                                 else {
                                     System.out.println("routing from " + recvPck.from + " to " + recvPck.to);

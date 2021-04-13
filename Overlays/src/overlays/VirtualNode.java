@@ -1,5 +1,8 @@
 package overlays;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import overlays.Packet.PacketType;
 
 public class VirtualNode extends Thread{
@@ -7,16 +10,36 @@ public class VirtualNode extends Thread{
     private int id;
     private int leftNeighbour;
     private int rightNeighbour;
+
+    private MessageBuffer inBuff, outBuff;
+    private ExecutorService services;
+
     public PhysicalNode physLayer;
 
     public VirtualNode(int id, String[] physNeigh) {
 
         this.id = id;
-        int n = physNeigh.length;
-        this.rightNeighbour = (id + 1) % n;
-        this.leftNeighbour = (n + id - 1) % n; // Assuming clockwise and increasing indexing (0, 1, .., N)
-        this.physLayer = new PhysicalNode(id, physNeigh);
-        this.physLayer.start();
+        this.rightNeighbour = (id + 1) % physNeigh.length;
+        this.leftNeighbour = (physNeigh.length + id - 1) % physNeigh.length; // Assuming clockwise and increasing indexing (0, 1, .., N)
+        
+        this.inBuff = new MessageBuffer(10);
+        this.outBuff = new MessageBuffer(10);
+        
+        this.services = Executors.newFixedThreadPool(2);
+
+        this.physLayer = new PhysicalNode(id, physNeigh, inBuff, outBuff);
+        services.execute(this.physLayer);
+
+        services.execute(new Runnable() {  
+            public void run() { 
+                while(true) {
+                    Packet recvPck = inBuff.getMessage();
+                    System.out.println(
+                        "\n\t[" + recvPck.from + "]: " + recvPck.msg 
+                    );
+                }
+            }
+        });
 
     }
 
@@ -36,14 +59,11 @@ public class VirtualNode extends Thread{
         pck.to = (right? this.rightNeighbour : this.leftNeighbour);
         pck.msg = message;
 
-        try {
-            this.physLayer.send(pck);
-        } catch (RouteException e) {
-            System.err.println(e.getMessage());
-        }        
+        this.outBuff.putMessage(pck);
+             
     }
 
     public void close() {
-        this.physLayer.close();
+        this.services.shutdown();
     }
 }
