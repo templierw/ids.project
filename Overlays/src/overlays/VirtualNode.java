@@ -1,5 +1,7 @@
 package overlays;
 
+import overlays.Packet.PacketType;
+
 public class VirtualNode extends Thread{
     // virtual
     private int id;
@@ -19,19 +21,26 @@ public class VirtualNode extends Thread{
     }
 
     public void sendLeft(String message) {
-        try {
-            this.physLayer.send(message, this.leftNeighbour, this.id);
-        } catch (RouteException e) {
-            System.err.println(e.getMessage());
-        }
+        this.send(message, false);
     }
 
     public void sendRight(String message){
+        this.send(message, true);
+    }
+
+    private void send(String message, boolean right) {
+
+        Packet pck = new Packet();
+        pck.type = PacketType.MSG;
+        pck.from = this.id;
+        pck.to = (right? this.rightNeighbour : this.leftNeighbour);
+        pck.msg = message;
+
         try {
-            this.physLayer.send(message, this.rightNeighbour, this.id);
+            this.physLayer.send(pck);
         } catch (RouteException e) {
             System.err.println(e.getMessage());
-        }
+        }        
     }
 
     public void close() {
