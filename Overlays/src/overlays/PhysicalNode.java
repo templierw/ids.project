@@ -11,6 +11,7 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 
 import overlays.Packet.PacketType;
+import overlays.exception.*;
 
 public class PhysicalNode extends Thread{
     // virtual
@@ -112,20 +113,24 @@ public class PhysicalNode extends Thread{
                             case MSG:                
                                 if (recvPck.to == id)
                                     upBuff.putMessage(recvPck);
-                        
-                                    /*System.out.println(
-                                        "[" + id + "]" + "received " + recvPck.msg + " from " + recvPck.from
-                                    );*/
                                 
                                 else {
-                                    System.out.println("routing from " + recvPck.from + " to " + recvPck.to);
+                                    System.out.println("\t\nrouting from " + recvPck.from + " to " + recvPck.to);
                                     try {
                                         send(recvPck);
                                     } catch (RouteException e) {
                                         System.err.println(e.getMessage());
                                     }
                                 } break;
-                        
+                                
+                            case BYE:
+                                table.removeRoute(recvPck.from);
+                                for(Integer n : table.getNeighbours()) {
+                                    recvPck.to = n;
+                                    send(recvPck);
+                                }
+                                break;
+
                             default:
                                 throw new PacketException("Invalid Packet Type");
                         }
@@ -186,6 +191,7 @@ public class PhysicalNode extends Thread{
 
     public void close() {
         try {
+            this.leaveNetwork();
             exit.set(true);
             this.channel.close();
             this.services.shutdown();
@@ -213,6 +219,23 @@ public class PhysicalNode extends Thread{
                 }
             }
         });
+    }
+
+    public void leaveNetwork() {
+
+        for(Integer n : this.table.getNeighbours()) {
+            Packet pck = new Packet();
+            pck.type = PacketType.BYE;
+            pck.from = this.id;
+            pck.to = n;
+            
+            try {
+                this.send(pck);
+            } catch (RouteException e) {
+                e.printStackTrace();
+            }
+        }
+
     }
 
     private byte[] marshallPacket(Packet pck) throws IOException {

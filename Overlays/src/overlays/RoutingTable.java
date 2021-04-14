@@ -2,6 +2,8 @@ package overlays;
 
 import java.util.LinkedList;
 
+import overlays.exception.RouteException;
+
 public class RoutingTable {
 
     int id;
@@ -88,5 +90,18 @@ public class RoutingTable {
         }
 
         return neighbours;
+    }
+
+    public void removeRoute(int to) throws RouteException {
+
+        Route toRemove = null;
+        for (Route r : this.table)
+            if (r.to == to)
+                toRemove = r;
+
+        if (toRemove == null) throw new RouteException("No such route to remove...");
+
+        else this.table.remove(toRemove);
+        
     }
 }

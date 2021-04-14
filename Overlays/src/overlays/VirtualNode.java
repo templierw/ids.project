@@ -64,6 +64,8 @@ public class VirtualNode extends Thread{
     }
 
     public void close() {
+
+        
         this.services.shutdown();
     }
 }
