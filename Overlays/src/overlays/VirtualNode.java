@@ -64,8 +64,11 @@ public class VirtualNode extends Thread{
     }
 
     public void close() {
-
-        
-        this.services.shutdown();
+        this.physLayer.close();
+        /*Packet pck = new Packet();
+        pck.type = PacketType.BYE;
+        pck.from = this.id;
+        this.outBuff.putMessage(pck);*/
+        //this.services.shutdown();
     }
 }

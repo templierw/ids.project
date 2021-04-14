@@ -24,7 +24,7 @@ public class PhysicalNode extends Thread{
     private String queueName;
 
     private ExecutorService services;
-    private Semaphore mustGossip;
+    private Semaphore mustGossip, canLeave;
 
     private AtomicBoolean exit = new AtomicBoolean(false);
 
@@ -34,23 +34,24 @@ public class PhysicalNode extends Thread{
         
         this.id = id;
         this.table = new RoutingTable(id, neighbours);
-
+        
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
-
+        
         this.services = Executors.newFixedThreadPool(4);
         mustGossip = new Semaphore(0);
-
+        canLeave = new Semaphore(0);
+        
         this.upBuff = upBuff;
         this.downBuff = downBuff;
-
+        
         try {
             this.channel = factory.newConnection().createChannel();
             channel.exchangeDeclare(EXCHANGE_NAME, "topic");
             this.queueName = channel.queueDeclare().getQueue();
             
             channel.queueBind(this.queueName, EXCHANGE_NAME, "link" + this.id);
-
+            
         } catch (Exception e) {
             System.err.println("An error occured... Program exiting");
             System.exit(1);
@@ -61,8 +62,9 @@ public class PhysicalNode extends Thread{
 
         this.hello();
 
-        services.execute(new Runnable() {  
+        services.execute(new Runnable() {
             public void run() { 
+
                 try {
                     boolean loop = true;
                     while(loop) {
@@ -79,11 +81,26 @@ public class PhysicalNode extends Thread{
 
         services.execute(new Runnable() {  
             public void run() {
+
                 while(true)
                     try {
-                        send(downBuff.getMessage());
-                    } catch (RouteException e) {
-                        e.printStackTrace();
+                        Packet pck = downBuff.getMessage();
+                        switch (pck.type) {
+                            case BYE:
+                                for (Integer n : table.getNeighbours()) {
+                                    pck.to = n;
+                                    send(pck);
+                                }
+                                break;
+
+                            case MSG: 
+                                send(pck);
+                                break;
+                        
+                            default: throw new PacketException("Invalid Packet Type");
+                        }
+                    } catch (Exception e) {
+                        System.err.println(e.getMessage());
                     }
             }
         });
@@ -124,11 +141,11 @@ public class PhysicalNode extends Thread{
                                 } break;
                                 
                             case BYE:
-                                table.removeRoute(recvPck.from);
-                                for(Integer n : table.getNeighbours()) {
-                                    recvPck.to = n;
-                                    send(recvPck);
-                                }
+                                if (recvPck.to == id) {
+                                    System.out.println("removing table for " + recvPck.from);
+                                    table.removeRoute(recvPck.from);
+                                
+                                } else send(recvPck);
                                 break;
 
                             default:
@@ -136,7 +153,7 @@ public class PhysicalNode extends Thread{
                         }
                         
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        System.err.println(e.getMessage());
                     }
                 };
         
@@ -192,9 +209,10 @@ public class PhysicalNode extends Thread{
     public void close() {
         try {
             this.leaveNetwork();
+            this.canLeave.acquire();
             exit.set(true);
-            this.channel.close();
-            this.services.shutdown();
+            //this.channel.close();
+            //this.services.shutdown();
         } catch (Exception e) {
             e.printStackTrace();
         } 
@@ -222,20 +240,19 @@ public class PhysicalNode extends Thread{
     }
 
     public void leaveNetwork() {
-
-        for(Integer n : this.table.getNeighbours()) {
+        for(Route r : table.table) {
             Packet pck = new Packet();
             pck.type = PacketType.BYE;
-            pck.from = this.id;
-            pck.to = n;
-            
+            pck.from = id;
+            pck.to = r.to;
+                    
             try {
-                this.send(pck);
+                send(pck);
             } catch (RouteException e) {
                 e.printStackTrace();
             }
         }
-
+        canLeave.release();                
     }
 
     private byte[] marshallPacket(Packet pck) throws IOException {

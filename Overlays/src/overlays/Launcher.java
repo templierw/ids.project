@@ -28,7 +28,7 @@ public class Launcher {
             physReader.close();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println(e.getMessage());
         }
 
         String[] cmd;
@@ -60,7 +60,7 @@ public class Launcher {
         s.close();
         myNode.close();
         myNode.join();
-
+        Thread.sleep(1000);
         System.exit(1);
     }
 }
