@@ -3,7 +3,7 @@ package overlays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import overlays.Packet.PacketType;
+import overlays.frames.Message;
 
 public class VirtualNode extends Thread{
     // virtual
@@ -33,9 +33,9 @@ public class VirtualNode extends Thread{
         services.execute(new Runnable() {  
             public void run() { 
                 while(true) {
-                    Packet recvPck = inBuff.getMessage();
+                    Message recvMsg = inBuff.getMessage();
                     System.out.println(
-                        "\n\t[" + recvPck.from + "]: " + recvPck.msg 
+                        "\n\t[" + recvMsg.getSender() + "]: " + recvMsg.readMessage() 
                     );
                 }
             }
@@ -53,22 +53,18 @@ public class VirtualNode extends Thread{
 
     private void send(String message, boolean right) {
 
-        Packet pck = new Packet();
-        pck.type = PacketType.MSG;
-        pck.from = this.id;
-        pck.to = (right? this.rightNeighbour : this.leftNeighbour);
-        pck.msg = message;
+        Message msg = new Message (
+            this.id,
+            (right? this.rightNeighbour : this.leftNeighbour)
+        );
+        
+        msg.writeMessage(message);
 
-        this.outBuff.putMessage(pck);
+        this.outBuff.putMessage(msg);
              
     }
 
     public void close() {
         this.physLayer.close();
-        /*Packet pck = new Packet();
-        pck.type = PacketType.BYE;
-        pck.from = this.id;
-        this.outBuff.putMessage(pck);*/
-        //this.services.shutdown();
     }
 }

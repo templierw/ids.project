@@ -2,15 +2,17 @@ package overlays;
 
 import java.util.concurrent.Semaphore;
 
+import overlays.frames.Message;
+
 public class MessageBuffer {
 
     private int in, out;
     private Semaphore lock, full, empty;
-    private Packet[] buffer;
+    private Message[] buffer;
 
     public MessageBuffer(int maxSize) {
 
-        this.buffer = new Packet[maxSize];
+        this.buffer = new Message[maxSize];
         this.lock = new Semaphore(1);
         this.full = new Semaphore(0);
         this.empty = new Semaphore(maxSize);
@@ -18,11 +20,11 @@ public class MessageBuffer {
 
     }
 
-    public void putMessage(Packet pck) {
+    public void putMessage(Message msg) {
         try {
             empty.acquire();
             lock.acquire();
-            this.buffer[in] = pck;
+            this.buffer[in] = msg;
             in = (in + 1) % this.buffer.length;
             
             lock.release();
@@ -33,12 +35,12 @@ public class MessageBuffer {
         }
     }
 
-    public Packet getMessage() {
-        Packet pck = null;
+    public Message getMessage() {
+        Message msg = null;
         try {
             full.acquire();
             lock.acquire();
-            pck = this.buffer[out];
+            msg = this.buffer[out];
             out = (out + 1) % this.buffer.length;
             
             lock.release();
@@ -48,7 +50,7 @@ public class MessageBuffer {
             e.printStackTrace();
         }
 
-        return pck;
+        return msg;
     }
     
 }

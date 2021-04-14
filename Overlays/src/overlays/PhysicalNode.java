@@ -10,8 +10,9 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 
-import overlays.Packet.PacketType;
 import overlays.exception.*;
+import overlays.frames.*;
+import overlays.frames.Packet.PacketType;
 
 public class PhysicalNode extends Thread{
     // virtual
@@ -84,21 +85,15 @@ public class PhysicalNode extends Thread{
 
                 while(true)
                     try {
-                        Packet pck = downBuff.getMessage();
-                        switch (pck.type) {
-                            case BYE:
-                                for (Integer n : table.getNeighbours()) {
-                                    pck.to = n;
-                                    send(pck);
-                                }
-                                break;
+                        Message msg = downBuff.getMessage();
+                        Packet pck = new Packet();
+                        pck.type = PacketType.MSG;
+                        pck.from = msg.getSender();
+                        pck.to = msg.getReceiver();
+                        pck.msg = msg;
 
-                            case MSG: 
-                                send(pck);
-                                break;
-                        
-                            default: throw new PacketException("Invalid Packet Type");
-                        }
+                        send(pck);
+                          
                     } catch (Exception e) {
                         System.err.println(e.getMessage());
                     }
@@ -129,7 +124,7 @@ public class PhysicalNode extends Thread{
 
                             case MSG:                
                                 if (recvPck.to == id)
-                                    upBuff.putMessage(recvPck);
+                                    upBuff.putMessage(recvPck.msg);
                                 
                                 else {
                                     System.out.println("\t\nrouting from " + recvPck.from + " to " + recvPck.to);
@@ -196,6 +191,7 @@ public class PhysicalNode extends Thread{
             Packet pck = new Packet();
             pck.type = PacketType.HELLO;
             pck.from = this.id;
+            pck.to = n;
             
             try {
                 byte[] bytes = marshallPacket(pck);
