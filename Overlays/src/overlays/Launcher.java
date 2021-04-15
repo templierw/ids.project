@@ -5,7 +5,20 @@ import java.io.FileReader;
 import java.util.Scanner;
 
 public class Launcher {
+
+    public enum Cmd {
+        SENDL,
+        SENR
+    }
     public static void main(String[] args) throws Exception {
+
+        /*Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Closing client safely");
+            try {
+                server.remove(this);
+            }
+            catch (Exception ignored) {}
+        }));*/
 
         Scanner s = new Scanner(System.in);
 

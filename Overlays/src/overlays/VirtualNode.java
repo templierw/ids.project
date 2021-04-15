@@ -11,7 +11,7 @@ public class VirtualNode extends Thread{
     private int leftNeighbour;
     private int rightNeighbour;
 
-    private MessageBuffer inBuff, outBuff;
+    private MessageBuffer recvBuff, sendBuff;
     private ExecutorService services;
 
     public PhysicalNode physLayer;
@@ -22,18 +22,18 @@ public class VirtualNode extends Thread{
         this.rightNeighbour = (id + 1) % physNeigh.length;
         this.leftNeighbour = (physNeigh.length + id - 1) % physNeigh.length; // Assuming clockwise and increasing indexing (0, 1, .., N)
         
-        this.inBuff = new MessageBuffer(10);
-        this.outBuff = new MessageBuffer(10);
+        this.recvBuff = new MessageBuffer(10);
+        this.sendBuff = new MessageBuffer(10);
         
         this.services = Executors.newFixedThreadPool(2);
 
-        this.physLayer = new PhysicalNode(id, physNeigh, inBuff, outBuff);
+        this.physLayer = new PhysicalNode(id, physNeigh, recvBuff, sendBuff);
         services.execute(this.physLayer);
 
         services.execute(new Runnable() {  
             public void run() { 
                 while(true) {
-                    Message recvMsg = inBuff.getMessage();
+                    Message recvMsg = recvBuff.getMessage();
                     System.out.println(
                         "\n\t[" + recvMsg.getSender() + "]: " + recvMsg.readMessage() 
                     );
@@ -60,7 +60,7 @@ public class VirtualNode extends Thread{
         
         msg.writeMessage(message);
 
-        this.outBuff.putMessage(msg);
+        this.sendBuff.putMessage(msg);
              
     }
 

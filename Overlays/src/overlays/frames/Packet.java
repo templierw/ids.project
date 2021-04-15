@@ -10,7 +10,8 @@ public class Packet implements Serializable {
         TABLE,
         MSG,
         HELLO,
-        BYE
+        BYE,
+        PING
     }
 
     public PacketType type;
