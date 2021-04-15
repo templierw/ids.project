@@ -1,7 +1,6 @@
 package overlays;
 
 import java.io.*;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,8 +42,6 @@ public class PhysicalNode extends Thread {
         this.id = id;
         this.table = new RoutingTable(id, neighbours);
 
-
-
         this.neigh = new LinkedList<>();
         for (int i = 0; i < neighbours.length; i++)
             this.neigh.add(new Neighbour(i));
@@ -78,18 +75,19 @@ public class PhysicalNode extends Thread {
 
         try {
             this.hello();
-        
+
         } catch (RouteException | DeadNodeException e1) {
             System.err.println(e1.getMessage());
-        
+
         } finally {
             services.execute(new Runnable() {
                 public void run() {
-    
+
                     try {
                         boolean loop = true;
                         while (loop) {
                             mustGossip.acquire();
+
                             if (!exit.get())
                                 gossip();
                             loop = !exit.get();
@@ -99,37 +97,35 @@ public class PhysicalNode extends Thread {
                     }
                 }
             });
-    
+
             services.execute(new Runnable() {
                 public void run() {
-    
+
                     while (true)
                         try {
-                            Message msg = downBuff.getMessage();
                             Packet pck = new Packet();
                             pck.type = PacketType.MSG;
+                            Message msg = downBuff.getMessage();
                             pck.from = msg.getSender();
                             pck.to = msg.getReceiver();
                             pck.msg = msg;
-    
+
                             send(pck);
-    
+
                         } catch (Exception e) {
                             System.err.println(e.getMessage());
                         }
                 }
             });
-    
+
             this.services.execute(new Runnable() {
                 public void run() {
-    
+
                     DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-    
+
                         try {
                             Packet recvPck = unmarshallPacket(delivery.getBody());
 
-                            table.resurrectRoute(recvPck.from);
-    
                             switch (recvPck.type) {
                             case TABLE:
                                 if (id != recvPck.to) {
@@ -137,18 +133,19 @@ public class PhysicalNode extends Thread {
                                     Route r = new Route(recvPck.to, recvPck.nbHop, recvPck.from, true);
                                     if (table.updateTable(r)) // flood only if new
                                         mustGossip.release();
-    
+
                                 }
                                 break;
-    
+
                             case HELLO:
+                                table.resurrectRoute(recvPck.from);
                                 mustGossip.release();
                                 break;
-    
+
                             case MSG:
                                 if (recvPck.to == id)
                                     upBuff.putMessage(recvPck.msg);
-    
+
                                 else {
                                     System.out.println("\t\nrouting from " + recvPck.from + " to " + recvPck.to);
                                     try {
@@ -158,81 +155,76 @@ public class PhysicalNode extends Thread {
                                     }
                                 }
                                 break;
-    
+
                             case BYE:
                                 if (recvPck.to == id) {
                                     System.out.println("removing table for " + recvPck.from);
                                     table.killRoute(recvPck.from);
-    
+
                                 } else
                                     send(recvPck);
                                 break;
-    
+
                             case PING:
-                                System.out.println("ping from " + recvPck.from);
                                 Neighbour n = neigh.get(recvPck.from);
                                 n.isAlive.set(true);
-                                n.TTL.set(3);
+                                n.TTL.set(2);
+                                if (table.isDeadRoute(n.id)) {
+                                    table.resurrectRoute(n.id);
+                                    mustGossip.release();
+                                }
                                 break;
-    
+
                             default:
                                 throw new PacketException("Invalid Packet Type");
                             }
-    
+
                         } catch (Exception e) {
                             System.err.println(e.getMessage());
                         }
                     };
-    
+
                     try {
-                        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> {});
-    
+                        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> {
+                        });
+
                     } catch (Exception e) {
                         System.err.println("An error occured... Program exiting");
                         System.exit(1);
                     }
                 }
             });
-    
+
             this.schedule.scheduleAtFixedRate(new Runnable() {
                 public void run() {
-                    System.out.println("pinging...");
 
                     for (Integer nidx : table.getNeighbours()) {
                         Neighbour n = neigh.get(nidx);
 
-                        int ttl = n.TTL.decrementAndGet();
-                        if (ttl == 0)
+                        if (n.TTL.decrementAndGet() == 0)
                             n.isAlive.set(false);
 
-                        
-                            try {
-                                System.out.println("... to " + n.id);
+                        try {
+                            Packet pck = new Packet();
+                            pck.type = PacketType.PING;
+                            pck.from = id;
+                            pck.to = n.id;
+                            send(pck);
 
-                                Packet pck = new Packet();
-                                pck.type = PacketType.PING;
-                                pck.from = id;
-                                pck.to = n.id;
-                                send(pck);
-                                
-                            } catch (Exception e) {
-                                System.err.println(e.getMessage());
-                            }
+                        } catch (Exception e) {
+                            System.err.println(e.getMessage());
+                        }
+
                     }
-                    
-                    try {
-                        Thread.sleep(5000);
-                        for (Integer nidx : table.getNeighbours())
-                            if (neigh.get(nidx).isAlive.get()) {
-                                System.out.println(nidx + " is alive");
-                                if (table.isDeadRoute(nidx))
-                                    table.resurrectRoute(nidx);
-                            }
 
-                            else {
-                                System.out.println(nidx + " is dead");
-                                if (!table.isDeadRoute(nidx))
+                    try {
+                        Thread.sleep(2000);
+                        for (Integer nidx : table.getNeighbours())
+                            if (!neigh.get(nidx).isAlive.get()) {
+                                if (!table.isDeadRoute(nidx)){
                                     table.killRoute(nidx);
+                                    mustGossip.release();
+                                }
                             }
                     } catch (RouteException e) {
                         System.err.println(e.getMessage());
@@ -240,11 +232,12 @@ public class PhysicalNode extends Thread {
                         e.printStackTrace();
                     }
                 }
-            }, 5, 10, TimeUnit.SECONDS);
+            }, 0, 15, TimeUnit.SECONDS);
         }
     }
 
     private void gossip() {
+        this.table.printTable();
         for (Integer n : this.table.getNeighbours()) {
             for (Route r : this.table.table) {
                 if (n != r.to) {

@@ -41,7 +41,15 @@ public class RoutingTable {
             return to_broadcast;
 
         if (this.hasRouteTo(r.to)) {
+            
             Route myRoute = this.getRouteTo(r.to);
+            try {
+                this.w.lock();
+                myRoute.alive = r.alive;
+
+            } finally {
+                this.w.unlock();
+            }
 
             if (myRoute.nbHop > r.nbHop + 1) {
                 try {
@@ -51,7 +59,6 @@ public class RoutingTable {
 
                 } finally {
                     this.w.unlock();
-                    System.out.println("r w");
                 }
 
                 to_broadcast = true;
@@ -118,7 +125,6 @@ public class RoutingTable {
 
         } finally {
             this.r.unlock();
-            System.out.println("released r");
 
         }
         System.out.println("----------------------------------");
