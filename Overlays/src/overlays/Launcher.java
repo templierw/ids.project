@@ -58,6 +58,10 @@ public class Launcher {
                 myNode.sendRight(cmd[1]);
             }
 
+            else if (cmd[0].compareTo("neigh") == 0) {
+                myNode.printNeighbours();
+            }
+
             else if (cmd[0].compareTo("--exit") == 0) {
                 loop = false;
             }

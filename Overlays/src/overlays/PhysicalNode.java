@@ -35,7 +35,7 @@ public class PhysicalNode extends Thread {
 
     MessageBuffer upBuff, downBuff;
 
-    private LinkedList<Neighbour> neigh;
+    public LinkedList<Neighbour> neigh;
 
     public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, MessageBuffer downBuff) {
 
@@ -130,7 +130,7 @@ public class PhysicalNode extends Thread {
                             case TABLE:
                                 if (id != recvPck.to) {
                                     // don't need the route to get to myself ...
-                                    Route r = new Route(recvPck.to, recvPck.nbHop, recvPck.from, true);
+                                    Route r = new Route(recvPck.to, recvPck.nbHop, recvPck.from, recvPck.alive);
                                     if (table.updateTable(r)) // flood only if new
                                         mustGossip.release();
 
@@ -168,7 +168,7 @@ public class PhysicalNode extends Thread {
                             case PING:
                                 Neighbour n = neigh.get(recvPck.from);
                                 n.isAlive.set(true);
-                                n.TTL.set(2);
+                                n.TTL.set(5);
                                 if (table.isDeadRoute(n.id)) {
                                     table.resurrectRoute(n.id);
                                     mustGossip.release();
@@ -232,12 +232,11 @@ public class PhysicalNode extends Thread {
                         e.printStackTrace();
                     }
                 }
-            }, 0, 15, TimeUnit.SECONDS);
+            }, 0, 5, TimeUnit.SECONDS);
         }
     }
 
     private void gossip() {
-        this.table.printTable();
         for (Integer n : this.table.getNeighbours()) {
             for (Route r : this.table.table) {
                 if (n != r.to) {
@@ -247,6 +246,7 @@ public class PhysicalNode extends Thread {
                     pck.from = this.id;
                     pck.to = r.to;
                     pck.nbHop = r.nbHop;
+                    pck.alive = r.alive;
 
                     try {
                         byte[] bytes = marshallPacket(pck);
@@ -328,6 +328,18 @@ public class PhysicalNode extends Thread {
         canLeave.release();
     }
 
+    public boolean isDead(int node) {
+        return this.neigh.get(node).isAlive.get();
+    }
+    
+    public int getNbAlive() {
+        int nb = 0;
+        for(Route r : this.table.table)
+            if (r.alive) nb++;
+        
+        return nb;
+    }
+    
     private byte[] marshallPacket(Packet pck) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutput out = new ObjectOutputStream(bos);

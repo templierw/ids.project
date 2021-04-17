@@ -31,6 +31,7 @@ public class RoutingTable {
                 }
             }
         }
+        printTable();
     }
 
     public boolean updateTable(Route r) {
@@ -66,6 +67,7 @@ public class RoutingTable {
 
         } else {
             r.nbHop += 1;
+            System.out.println(r.alive);
             try {
                 this.w.lock();
                 this.table.add(r);

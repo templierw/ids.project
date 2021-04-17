@@ -3,13 +3,12 @@ package overlays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import overlays.exception.RouteException;
 import overlays.frames.Message;
 
 public class VirtualNode extends Thread{
     // virtual
-    private int id;
-    private int leftNeighbour;
-    private int rightNeighbour;
+    public int id, nbNodes;
 
     private MessageBuffer recvBuff, sendBuff;
     private ExecutorService services;
@@ -19,8 +18,7 @@ public class VirtualNode extends Thread{
     public VirtualNode(int id, String[] physNeigh) {
 
         this.id = id;
-        this.rightNeighbour = (id + 1) % physNeigh.length;
-        this.leftNeighbour = (physNeigh.length + id - 1) % physNeigh.length; // Assuming clockwise and increasing indexing (0, 1, .., N)
+        this.nbNodes = physNeigh.length;
         
         this.recvBuff = new MessageBuffer(10);
         this.sendBuff = new MessageBuffer(10);
@@ -55,7 +53,7 @@ public class VirtualNode extends Thread{
 
         Message msg = new Message (
             this.id,
-            (right? this.rightNeighbour : this.leftNeighbour)
+            this.getNeighbour(right, false)
         );
         
         msg.writeMessage(message);
@@ -66,5 +64,36 @@ public class VirtualNode extends Thread{
 
     public void close() {
         this.physLayer.close();
+    }
+
+    public void printNeighbours() {
+        System.out.println(
+            "right: " + this.getNeighbour(true, false) +
+            "\nleft: "+ this.getNeighbour(false, false)
+        );
+        for(Neighbour n : physLayer.neigh)
+            n.display();
+    }
+
+    private int getNeighbour(boolean right, boolean init) {
+        boolean ok = init;
+        int neigh = -1, nodes = this.physLayer.getNbAlive() + 1;
+
+        if (nodes == 1) return this.id;
+
+        System.out.println(nodes);
+        for(int i = 1; i < nodes & !ok; i++) {
+            neigh = (right? 
+                        (this.id + i) % nodes : 
+                        (nodes + id - i) % nodes
+                    );
+            try {
+                ok = !this.physLayer.table.isDeadRoute(neigh);
+            } catch (RouteException e) {
+                e.printStackTrace();
+            }
+            }
+            
+        return neigh;
     }
 }

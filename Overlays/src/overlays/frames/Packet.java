@@ -18,6 +18,7 @@ public class Packet implements Serializable {
     public int from;
     public int to;
     public int nbHop;
+    public boolean alive;
     public Message msg;
     
 }

@@ -14,4 +14,10 @@ public class Neighbour {
         this.isAlive = new AtomicBoolean(false);
         this.TTL = new AtomicInteger(0);
     }
+
+    public void display() {
+        System.out.println(
+            "["+ this.id +"]" + "[" + this.isAlive + "]" + "[" + this.TTL + "]" 
+        );
+    }
 }
