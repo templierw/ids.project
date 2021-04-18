@@ -1,2 +1,2 @@
-Main-Class: overlays.Launcher
+Main-Class: overlay.Launcher
 Class-Path: lib/amqp-client-5.8.0.jar lib/slf4j-api-1.7.30.jar lib/slf4j-simple-1.7.30.jar

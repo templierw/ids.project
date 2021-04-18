@@ -89,7 +89,7 @@ public class PhysicalNode extends Thread {
         try {
             this.hello();
 
-        } catch (RouteException | DeadNodeException e) {
+        } catch (RouteException e) {
             this.errprint(e.getMessage());
 
             // Phys layer services
@@ -284,7 +284,7 @@ public class PhysicalNode extends Thread {
         }
     }
 
-    private void hello() throws RouteException, DeadNodeException {
+    private void hello() throws RouteException {
         for (Integer n : this.table.getNeighbours()) {
             Packet pck = new Packet();
             pck.type = PacketType.HELLO;

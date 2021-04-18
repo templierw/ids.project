@@ -13,7 +13,7 @@ public class Launcher {
         String neighbours = "";
         try {
             BufferedReader physReader = new BufferedReader(
-                    new FileReader("./config/" + args[0] + ".txt")
+                    new FileReader("./topologies/" + args[0] + ".txt")
                 );
 
             int i = 0;
@@ -26,6 +26,7 @@ public class Launcher {
                 
             } catch (Exception e) {
                 System.err.println(e.getMessage());
+                System.exit(-1);
             }
 
         final VirtualNode myNode = new VirtualNode(id, neighbours.split(":"));

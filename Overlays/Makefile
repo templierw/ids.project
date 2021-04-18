@@ -7,16 +7,16 @@ CP = -cp lib/amqp-client-5.8.0.jar
 
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
 
-SRC_OVERLAYS = $(call rwildcard,$(SRCDIR)/overlays,*.java)
-CLASSES_OVERLAYS = $(SRC_OVERLAYS:$(SRCDIR)/overlays/%.java=$(OUTDIR)/overlays/%.class)
+SRC_OVERLAY = $(call rwildcard,$(SRCDIR)/overlay,*.java)
+CLASSES_OVERLAY = $(SRC_OVERLAY:$(SRCDIR)/overlay/%.java=$(OUTDIR)/overlay/%.class)
 
 build: node.jar
 
-node.jar: $(CLASSES_OVERLAYS)
-	jar cfm $@ manifest/overlays.txt -C out ./overlays/
+node.jar: $(CLASSES_OVERLAY)
+	jar cfm $@ manifest/overlay.txt -C out ./overlay/
 
-$(CLASSES_OVERLAYS): $(SRC_OVERLAYS)
-	$(JC) $(CP) $(SRC_OVERLAYS) -d out
+$(CLASSES_OVERLAY): $(SRC_OVERLAY)
+	$(JC) $(CP) $(SRC_OVERLAY) -d out
 
 .PHONY: clean
 clean:
