@@ -1,4 +1,4 @@
-package overlays.exception;
+package overlay.exception;
 
 public class UnreachableNeighbourException extends Exception {
 

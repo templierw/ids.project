@@ -1,4 +1,4 @@
-package overlays.frames;
+package overlay.frames;
 
 import java.io.Serializable;
 

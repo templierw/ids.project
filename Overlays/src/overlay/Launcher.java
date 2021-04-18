@@ -1,4 +1,4 @@
-package overlays;
+package overlay;
 
 import java.io.BufferedReader;
 import java.io.FileReader;

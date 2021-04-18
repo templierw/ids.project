@@ -1,8 +1,8 @@
-package overlays.utils;
+package overlay.utils;
 
 import java.util.concurrent.Semaphore;
 
-import overlays.frames.Message;
+import overlay.frames.Message;
 
 public class MessageBuffer {
 

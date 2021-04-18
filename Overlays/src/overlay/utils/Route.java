@@ -1,4 +1,4 @@
-package overlays.utils;
+package overlay.utils;
 
 import java.io.Serializable;
 

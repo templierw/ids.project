@@ -1,4 +1,4 @@
-package overlays.utils;
+package overlay.utils;
 
 public class ShellColour {
     public static final String ANSI_RESET = "\u001B[0m";

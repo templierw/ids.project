@@ -1,4 +1,4 @@
-package overlays;
+package overlay;
 
 import java.io.*;
 import java.util.LinkedList;
@@ -14,13 +14,13 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
 
-import overlays.exception.*;
-import overlays.frames.*;
-import overlays.frames.Packet.PacketType;
-import overlays.utils.MessageBuffer;
-import overlays.utils.Neighbour;
-import overlays.utils.Route;
-import overlays.utils.ShellColour;
+import overlay.exception.*;
+import overlay.frames.*;
+import overlay.frames.Packet.PacketType;
+import overlay.utils.MessageBuffer;
+import overlay.utils.Neighbour;
+import overlay.utils.Route;
+import overlay.utils.ShellColour;
 
 public class PhysicalNode extends Thread {
     // virtual
