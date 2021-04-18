@@ -166,35 +166,20 @@ public class RoutingTable extends Sendable {
     }
 
     public void killRoute(int to) throws RouteException {
-        Route toKill = null;
-
+        if (!this.hasRouteTo(to)) return;
+        
         try {
-            this.r.lock();
+            this.w.lock();
 
-            for (Route r : this.table)
-                if (r.to == to) {
-                    toKill = r;
-                    break;
+            for(int i=0; i < this.table.size(); i++) {
+                Route r = this.table.get(i);
+                if (r.gate == to) {
+                    r.alive = false;
                 }
+            }
 
         } finally {
-            this.r.unlock();
-        }
-
-        if (toKill == null)
-            throw new RouteException("No such route to kill...");
-
-        else {
-            try {
-                this.w.lock();
-                toKill.alive = false;
-                for(Route r : this.table)
-                    if(r.gate == to)
-                        r.alive = false;
-            
-            } finally {
-                this.w.unlock();
-            }
+            this.w.unlock();
         }
     }
 

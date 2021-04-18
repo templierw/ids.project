@@ -35,7 +35,7 @@ public class PhysicalNode extends Thread {
 
     private ExecutorService services;
     private ScheduledExecutorService schedule;
-    private Semaphore mustGossip, gossipLock;
+    private Semaphore mustGossip;
 
     private AtomicBoolean exit;
     private AtomicInteger maxHost;
@@ -67,7 +67,6 @@ public class PhysicalNode extends Thread {
         this.schedule = Executors.newScheduledThreadPool(2);
 
         mustGossip = new Semaphore(0);
-        gossipLock = new Semaphore(1);
 
         this.upBuff = upBuff;
         this.downBuff = downBuff;
@@ -103,9 +102,11 @@ public class PhysicalNode extends Thread {
                     try {
                         while (!exit.get()) {
                             mustGossip.acquire();
-                            if (VERBOSE)
-                                pprint("gossiping...", ShellColour.ANSI_PURPLE);
-                            gossip();
+                            if(!exit.get()) {
+                                if (VERBOSE)
+                                    pprint("gossiping...", ShellColour.ANSI_PURPLE);
+                                gossip();
+                            }
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -265,18 +266,11 @@ public class PhysicalNode extends Thread {
                     }
                 }
             }, 0, 5, TimeUnit.SECONDS);
-
-            this.schedule.scheduleAtFixedRate(new Runnable() {
-                public void run() {
-                    mustGossip.release();
-                }
-            }, 15, 15, TimeUnit.SECONDS);
         }
     }
 
     private void gossip() throws InterruptedException {
         for (Integer n : this.table.getNeighbours()) {
-            gossipLock.acquire();
             Packet pck = new Packet();
             pck.type = PacketType.TABLE;
             pck.from = this.id;
@@ -285,10 +279,8 @@ public class PhysicalNode extends Thread {
             try {
                 send(pck);
             } catch (RouteException e) {
-                pprint("ici", ShellColour.ANSI_YELLOW);
-                // errprint(e.getMessage());
+                errprint(e.getMessage());
             }
-            gossipLock.release();
         }
     }
 
@@ -322,7 +314,6 @@ public class PhysicalNode extends Thread {
                         byte[] bytes = marshallPacket(pck);
                         channel.basicPublish(EXCHANGE_NAME, "link" + nextHop.gate, null, bytes);
                     } catch (Exception e) {
-                        pprint("ici4", ShellColour.ANSI_YELLOW);
                         errprint(e.getMessage());
                     }
                 }
@@ -330,22 +321,25 @@ public class PhysicalNode extends Thread {
     }
 
     public void close() {
-        this.leaveNetwork();
         exit.set(true);
+        this.schedule.shutdown();
+        this.mustGossip.release(); // to kill it
+        this.leaveNetwork();
+        this.services.shutdown();
     }
 
     public void leaveNetwork() {
-        try {
-            for (Route r : table.table) {
-                Packet pck = new Packet();
-                pck.type = PacketType.BYE;
-                pck.from = id;
-                pck.to = r.to;
+        for (Integer n : this.table.getNeighbours()) {
+            Packet pck = new Packet();
+            pck.type = PacketType.BYE;
+            pck.from = id;
+            pck.to = n;
 
+            try {
                 send(pck);
+            } catch (RouteException e) {
+                errprint(e.getMessage());
             }
-        } catch (RouteException e) {
-            errprint(e.getMessage());
         }
     }
 

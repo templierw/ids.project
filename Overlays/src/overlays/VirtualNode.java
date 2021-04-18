@@ -57,7 +57,7 @@ public class VirtualNode extends Thread{
 
         Message msg = new Message (
             this.id,
-            this.getNeighbour(right, false)
+            this.getNeighbour(right)
         );
         
         msg.writeMessage(message);
@@ -72,18 +72,18 @@ public class VirtualNode extends Thread{
 
     public void printNeighbours() {
         System.out.println(
-            "right: " + this.getNeighbour(true, false) +
-            "\nleft: "+ this.getNeighbour(false, false)
+            "right: " + this.getNeighbour(true) +
+            "\nleft: "+ this.getNeighbour(false)
         );
         for(Neighbour n : physLayer.neigh)
             n.display();
     }
 
-    private int getNeighbour(boolean right, boolean init) {
-        boolean ok = init;
+    private int getNeighbour(boolean right) {
         int neigh = -1, nodes = this.physLayer.getMaxHost();
         if (nodes == 1) return this.id;
         
+        boolean ok = false;
         for(int i = 1; i <= nodes & !ok; i++) {
             neigh = (right? 
                         (this.id + i) % nodes : 
@@ -96,7 +96,6 @@ public class VirtualNode extends Thread{
                 e.printStackTrace();
             }
         }
-            
         return neigh;
     }
 }
