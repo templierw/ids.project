@@ -1,10 +1,7 @@
 package overlays.frames;
 
-import java.io.Serializable;
 
-public class Message implements Serializable {
-
-    private static final long serialVersionUID = 206657426723855743L;
+public class Message extends Sendable {
 
     private String content;
     private int sender, receiver;

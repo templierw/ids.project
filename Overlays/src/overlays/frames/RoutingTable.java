@@ -1,15 +1,24 @@
-package overlays;
+package overlays.frames;
 
 import java.util.LinkedList;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import overlays.exception.RouteException;
+import overlays.utils.Route;
 
-public class RoutingTable {
+public class RoutingTable extends Sendable {
+
+    public enum RouteStatus {
+        IGNORED,
+        ADDED,
+        UPDATED,
+        DELETED
+    }
 
     private int id;
     public LinkedList<Route> table;
+    public int lastAdded;
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
@@ -34,51 +43,56 @@ public class RoutingTable {
         printTable();
     }
 
-    public boolean updateTable(Route r) {
+    public RouteStatus updateTable(int from, RoutingTable table) {
 
-        boolean to_broadcast = false;
+        RouteStatus res = RouteStatus.IGNORED;
+        this.lastAdded = 0;
 
-        if (r.to == this.id)
-            return to_broadcast;
-
-        if (this.hasRouteTo(r.to)) {
-            
-            Route myRoute = this.getRouteTo(r.to);
-            try {
-                this.w.lock();
-                myRoute.alive = r.alive;
-
-            } finally {
-                this.w.unlock();
+        for (Route r : table.table) {
+            if (r.to != this.id)
+                if (this.hasRouteTo(r.to)) {
+                    
+                    Route myRoute = this.getRouteTo(r.to);
+                    try {
+                        this.w.lock();
+                        if (myRoute.alive != r.alive) {
+                            myRoute.alive = r.alive;
+                            if (res != RouteStatus.ADDED)
+                                res = RouteStatus.UPDATED;
+                        }
+        
+                    } finally {
+                        this.w.unlock();
+                    }
+        
+                    if (myRoute.nbHop > r.nbHop + 1) {
+                        try {
+                            this.w.lock();
+                            myRoute.gate = from;
+                            myRoute.nbHop = r.nbHop + 1;
+                            if (res != RouteStatus.ADDED)
+                                res = RouteStatus.UPDATED;;
+        
+                        } finally {
+                            this.w.unlock();
+                        }
+                    }
+        
+                } else {
+                    r.nbHop += 1;
+                    r.gate = from;
+                    try {
+                        this.w.lock();
+                        this.table.add(r);
+                        res = RouteStatus.ADDED;
+                        this.lastAdded++;
+        
+                    } finally {
+                        this.w.unlock();
+                    }
+                }        
             }
-
-            if (myRoute.nbHop > r.nbHop + 1) {
-                try {
-                    this.w.lock();
-                    myRoute.gate = r.gate;
-                    myRoute.nbHop = r.nbHop + 1;
-
-                } finally {
-                    this.w.unlock();
-                }
-
-                to_broadcast = true;
-            }
-
-        } else {
-            r.nbHop += 1;
-            System.out.println(r.alive);
-            try {
-                this.w.lock();
-                this.table.add(r);
-
-            } finally {
-                this.w.unlock();
-            }
-            to_broadcast = true;
-        }
-
-        return to_broadcast;
+        return res;
     }
 
     public boolean hasRouteTo(int to) {
@@ -174,6 +188,9 @@ public class RoutingTable {
             try {
                 this.w.lock();
                 toKill.alive = false;
+                for(Route r : this.table)
+                    if(r.gate == to)
+                        r.alive = false;
             
             } finally {
                 this.w.unlock();
@@ -226,4 +243,6 @@ public class RoutingTable {
 
         return isDead;
     }
+
+
 }

@@ -8,6 +8,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
@@ -16,11 +17,16 @@ import com.rabbitmq.client.DeliverCallback;
 import overlays.exception.*;
 import overlays.frames.*;
 import overlays.frames.Packet.PacketType;
+import overlays.utils.MessageBuffer;
+import overlays.utils.Neighbour;
+import overlays.utils.Route;
+import overlays.utils.ShellColour;
 
 public class PhysicalNode extends Thread {
     // virtual
 
     private static final String EXCHANGE_NAME = "o";
+    private boolean VERBOSE;
 
     public int id;
     public RoutingTable table;
@@ -29,18 +35,26 @@ public class PhysicalNode extends Thread {
 
     private ExecutorService services;
     private ScheduledExecutorService schedule;
-    private Semaphore mustGossip, canLeave;
+    private Semaphore mustGossip, gossipLock;
 
-    private AtomicBoolean exit = new AtomicBoolean(false);
+    private AtomicBoolean exit;
+    private AtomicInteger maxHost;
 
     MessageBuffer upBuff, downBuff;
 
     public LinkedList<Neighbour> neigh;
 
-    public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, MessageBuffer downBuff) {
+    public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, MessageBuffer downBuff, boolean verbose) {
+
+        this.VERBOSE = verbose;
+        if (this.VERBOSE)
+            this.pprint("creating physical layer...", ShellColour.ANSI_GREEN);
+
+        this.exit = new AtomicBoolean(false);
 
         this.id = id;
         this.table = new RoutingTable(id, neighbours);
+        this.maxHost = new AtomicInteger(this.table.table.size() + 1);
 
         this.neigh = new LinkedList<>();
         for (int i = 0; i < neighbours.length; i++)
@@ -50,10 +64,10 @@ public class PhysicalNode extends Thread {
         factory.setHost("localhost");
 
         this.services = Executors.newFixedThreadPool(4);
-        this.schedule = Executors.newScheduledThreadPool(1);
+        this.schedule = Executors.newScheduledThreadPool(2);
 
         mustGossip = new Semaphore(0);
-        canLeave = new Semaphore(0);
+        gossipLock = new Semaphore(1);
 
         this.upBuff = upBuff;
         this.downBuff = downBuff;
@@ -66,7 +80,7 @@ public class PhysicalNode extends Thread {
             channel.queueBind(this.queueName, EXCHANGE_NAME, "link" + this.id);
 
         } catch (Exception e) {
-            System.err.println("An error occured... Program exiting");
+            this.errprint();
             System.exit(1);
         }
     }
@@ -76,48 +90,52 @@ public class PhysicalNode extends Thread {
         try {
             this.hello();
 
-        } catch (RouteException | DeadNodeException e1) {
-            System.err.println(e1.getMessage());
+        } catch (RouteException | DeadNodeException e) {
+            this.errprint(e.getMessage());
 
+            // Phys layer services
         } finally {
+
+            // gossip service
             services.execute(new Runnable() {
                 public void run() {
 
                     try {
-                        boolean loop = true;
-                        while (loop) {
+                        while (!exit.get()) {
                             mustGossip.acquire();
-
-                            if (!exit.get())
-                                gossip();
-                            loop = !exit.get();
+                            if (VERBOSE)
+                                pprint("gossiping...", ShellColour.ANSI_PURPLE);
+                            gossip();
                         }
-                    } catch (InterruptedException e) {
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
             });
 
+            // send message services
             services.execute(new Runnable() {
                 public void run() {
 
-                    while (true)
+                    while (!exit.get())
                         try {
                             Packet pck = new Packet();
                             pck.type = PacketType.MSG;
                             Message msg = downBuff.getMessage();
                             pck.from = msg.getSender();
                             pck.to = msg.getReceiver();
-                            pck.msg = msg;
+                            pck.data = msg;
 
                             send(pck);
 
                         } catch (Exception e) {
-                            System.err.println(e.getMessage());
+                            errprint(e.getMessage());
+                            ;
                         }
                 }
             });
 
+            // receive packet service
             this.services.execute(new Runnable() {
                 public void run() {
 
@@ -128,44 +146,59 @@ public class PhysicalNode extends Thread {
 
                             switch (recvPck.type) {
                             case TABLE:
-                                if (id != recvPck.to) {
-                                    // don't need the route to get to myself ...
-                                    Route r = new Route(recvPck.to, recvPck.nbHop, recvPck.from, recvPck.alive);
-                                    if (table.updateTable(r)) // flood only if new
-                                        mustGossip.release();
-
+                                switch (table.updateTable(recvPck.from,(RoutingTable) recvPck.data)) {
+                                case ADDED:
+                                    mustGossip.release();
+                                    maxHost.addAndGet(table.lastAdded);
+                                    break;
+                                case UPDATED:
+                                    mustGossip.release();
+                                    break;
+                                case IGNORED:
+                                    break;
+                                case DELETED:
+                                    break;
                                 }
+
                                 break;
 
                             case HELLO:
+                                if (VERBOSE)
+                                    pprint("receive 'hello' from" + recvPck.from, ShellColour.ANSI_PURPLE);
                                 table.resurrectRoute(recvPck.from);
                                 mustGossip.release();
                                 break;
 
                             case MSG:
                                 if (recvPck.to == id)
-                                    upBuff.putMessage(recvPck.msg);
+                                    upBuff.putMessage((Message) recvPck.data);
 
                                 else {
-                                    System.out.println("\t\nrouting from " + recvPck.from + " to " + recvPck.to);
+                                    if (VERBOSE)
+                                        pprint("routing from: " + recvPck.from + ", to: " + recvPck.to,
+                                                ShellColour.ANSI_BLUE);
                                     try {
                                         send(recvPck);
                                     } catch (RouteException e) {
-                                        System.err.println(e.getMessage());
+                                        errprint(e.getMessage());
                                     }
                                 }
                                 break;
 
                             case BYE:
                                 if (recvPck.to == id) {
-                                    System.out.println("removing table for " + recvPck.from);
+                                    if (VERBOSE)
+                                        pprint("killing route for: " + recvPck.from, ShellColour.ANSI_YELLOW);
                                     table.killRoute(recvPck.from);
+                                    mustGossip.release();
 
                                 } else
                                     send(recvPck);
                                 break;
 
                             case PING:
+                                if (VERBOSE)
+                                    pprint("received ping from: " + recvPck.from, ShellColour.ANSI_CYAN);
                                 Neighbour n = neigh.get(recvPck.from);
                                 n.isAlive.set(true);
                                 n.TTL.set(5);
@@ -180,7 +213,8 @@ public class PhysicalNode extends Thread {
                             }
 
                         } catch (Exception e) {
-                            System.err.println(e.getMessage());
+                            pprint("ici1", ShellColour.ANSI_YELLOW);
+                            errprint(e.getMessage());
                         }
                     };
 
@@ -189,7 +223,7 @@ public class PhysicalNode extends Thread {
                         });
 
                     } catch (Exception e) {
-                        System.err.println("An error occured... Program exiting");
+                        errprint();
                         System.exit(1);
                     }
                 }
@@ -212,7 +246,7 @@ public class PhysicalNode extends Thread {
                             send(pck);
 
                         } catch (Exception e) {
-                            System.err.println(e.getMessage());
+                            errprint(e.getMessage());
                         }
 
                     }
@@ -221,73 +255,55 @@ public class PhysicalNode extends Thread {
                         Thread.sleep(2000);
                         for (Integer nidx : table.getNeighbours())
                             if (!neigh.get(nidx).isAlive.get()) {
-                                if (!table.isDeadRoute(nidx)){
+                                if (!table.isDeadRoute(nidx)) {
                                     table.killRoute(nidx);
                                     mustGossip.release();
                                 }
                             }
-                    } catch (RouteException e) {
-                        System.err.println(e.getMessage());
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                    } catch (Exception e) {
+                        errprint(e.getMessage());
                     }
                 }
             }, 0, 5, TimeUnit.SECONDS);
+
+            this.schedule.scheduleAtFixedRate(new Runnable() {
+                public void run() {
+                    mustGossip.release();
+                }
+            }, 15, 15, TimeUnit.SECONDS);
         }
     }
 
-    private void gossip() {
+    private void gossip() throws InterruptedException {
         for (Integer n : this.table.getNeighbours()) {
-            for (Route r : this.table.table) {
-                if (n != r.to) {
-
-                    Packet pck = new Packet();
-                    pck.type = PacketType.TABLE;
-                    pck.from = this.id;
-                    pck.to = r.to;
-                    pck.nbHop = r.nbHop;
-                    pck.alive = r.alive;
-
-                    try {
-                        byte[] bytes = marshallPacket(pck);
-                        channel.basicPublish(EXCHANGE_NAME, "link" + n, null, bytes);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
+            gossipLock.acquire();
+            Packet pck = new Packet();
+            pck.type = PacketType.TABLE;
+            pck.from = this.id;
+            pck.to = n;
+            pck.data = this.table;
+            try {
+                send(pck);
+            } catch (RouteException e) {
+                pprint("ici", ShellColour.ANSI_YELLOW);
+                // errprint(e.getMessage());
             }
+            gossipLock.release();
         }
     }
 
     private void hello() throws RouteException, DeadNodeException {
         for (Integer n : this.table.getNeighbours()) {
-            if (!table.isDeadRoute(n)) {
+            Packet pck = new Packet();
+            pck.type = PacketType.HELLO;
+            pck.from = this.id;
+            pck.to = n;
 
-                Packet pck = new Packet();
-                pck.type = PacketType.HELLO;
-                pck.from = this.id;
-                pck.to = n;
-
-                try {
-                    byte[] bytes = marshallPacket(pck);
-                    channel.basicPublish(EXCHANGE_NAME, "link" + n, null, bytes);
-                    mustGossip.release();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            try {
+                send(pck);
+            } catch (RouteException e) {
+                errprint(e.getMessage());
             }
-        }
-    }
-
-    public void close() {
-        try {
-            this.leaveNetwork();
-            this.canLeave.acquire();
-            exit.set(true);
-            // this.channel.close();
-            // this.services.shutdown();
-        } catch (Exception e) {
-            e.printStackTrace();
         }
     }
 
@@ -306,40 +322,41 @@ public class PhysicalNode extends Thread {
                         byte[] bytes = marshallPacket(pck);
                         channel.basicPublish(EXCHANGE_NAME, "link" + nextHop.gate, null, bytes);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        pprint("ici4", ShellColour.ANSI_YELLOW);
+                        errprint(e.getMessage());
                     }
                 }
             });
     }
 
-    public void leaveNetwork() {
-        for (Route r : table.table) {
-            Packet pck = new Packet();
-            pck.type = PacketType.BYE;
-            pck.from = id;
-            pck.to = r.to;
+    public void close() {
+        this.leaveNetwork();
+        exit.set(true);
+    }
 
-            try {
+    public void leaveNetwork() {
+        try {
+            for (Route r : table.table) {
+                Packet pck = new Packet();
+                pck.type = PacketType.BYE;
+                pck.from = id;
+                pck.to = r.to;
+
                 send(pck);
-            } catch (RouteException e) {
-                e.printStackTrace();
             }
+        } catch (RouteException e) {
+            errprint(e.getMessage());
         }
-        canLeave.release();
     }
 
     public boolean isDead(int node) {
         return this.neigh.get(node).isAlive.get();
     }
-    
-    public int getNbAlive() {
-        int nb = 0;
-        for(Route r : this.table.table)
-            if (r.alive) nb++;
-        
-        return nb;
+
+    public int getMaxHost() {
+        return this.maxHost.get();
     }
-    
+
     private byte[] marshallPacket(Packet pck) throws Exception {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutput out = new ObjectOutputStream(bos);
@@ -354,5 +371,18 @@ public class PhysicalNode extends Thread {
         ObjectInput in = new ObjectInputStream(new ByteArrayInputStream(bytes));
 
         return (Packet) in.readObject();
+    }
+
+    private void pprint(String msg, String colour) {
+        System.out.println("\t\t" + colour + "PHYS.LAYER: " + msg + ShellColour.ANSI_RESET);
+    }
+
+    private void errprint(String msg) {
+        System.err.println(ShellColour.ANSI_RED + "\t\tPHYS.LAYER: " + msg + ShellColour.ANSI_RESET);
+    }
+
+    private void errprint() {
+        System.err.println(
+                ShellColour.ANSI_RED + "\t\tPHYS.LAYER: An error occured... Program exiting" + ShellColour.ANSI_RESET);
     }
 }

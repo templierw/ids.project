@@ -1,6 +1,8 @@
-package overlays;
+package overlays.utils;
 
-public class Route {
+import java.io.Serializable;
+
+public class Route implements Serializable{
 
     public int to;
     public int nbHop;

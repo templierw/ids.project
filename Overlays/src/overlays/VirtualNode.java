@@ -5,6 +5,9 @@ import java.util.concurrent.Executors;
 
 import overlays.exception.RouteException;
 import overlays.frames.Message;
+import overlays.utils.MessageBuffer;
+import overlays.utils.Neighbour;
+import overlays.utils.ShellColour;
 
 public class VirtualNode extends Thread{
     // virtual
@@ -25,15 +28,16 @@ public class VirtualNode extends Thread{
         
         this.services = Executors.newFixedThreadPool(2);
 
-        this.physLayer = new PhysicalNode(id, physNeigh, recvBuff, sendBuff);
+        this.physLayer = new PhysicalNode(id, physNeigh, recvBuff, sendBuff, true);
         services.execute(this.physLayer);
 
         services.execute(new Runnable() {  
             public void run() { 
                 while(true) {
                     Message recvMsg = recvBuff.getMessage();
-                    System.out.println(
-                        "\n\t[" + recvMsg.getSender() + "]: " + recvMsg.readMessage() 
+                    System.out.println(ShellColour.ANSI_GREEN +
+                        "\n\t[" + recvMsg.getSender() + "]: " + recvMsg.readMessage() +
+                        ShellColour.ANSI_RESET
                     );
                 }
             }
@@ -77,22 +81,21 @@ public class VirtualNode extends Thread{
 
     private int getNeighbour(boolean right, boolean init) {
         boolean ok = init;
-        int neigh = -1, nodes = this.physLayer.getNbAlive() + 1;
-
+        int neigh = -1, nodes = this.physLayer.getMaxHost();
         if (nodes == 1) return this.id;
-
-        System.out.println(nodes);
-        for(int i = 1; i < nodes & !ok; i++) {
+        
+        for(int i = 1; i <= nodes & !ok; i++) {
             neigh = (right? 
                         (this.id + i) % nodes : 
-                        (nodes + id - i) % nodes
+                        (nodes + this.id - i) % nodes
                     );
             try {
-                ok = !this.physLayer.table.isDeadRoute(neigh);
+                if (neigh == id) ok = true;
+                else ok = !this.physLayer.table.isDeadRoute(neigh);
             } catch (RouteException e) {
                 e.printStackTrace();
             }
-            }
+        }
             
         return neigh;
     }

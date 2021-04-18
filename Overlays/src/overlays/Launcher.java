@@ -4,27 +4,13 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.Scanner;
 
-public class Launcher {
-
-    public enum Cmd {
-        SENDL,
-        SENR
-    }
+public class Launcher {  
     public static void main(String[] args) throws Exception {
 
-        /*Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Closing client safely");
-            try {
-                server.remove(this);
-            }
-            catch (Exception ignored) {}
-        }));*/
-
         Scanner s = new Scanner(System.in);
-
-        VirtualNode myNode = null;
         
         int id = Integer.parseInt(args[1]);
+        String neighbours = "";
         try {
             BufferedReader physReader = new BufferedReader(
                     new FileReader("./config/" + args[0] + ".txt")
@@ -34,15 +20,24 @@ public class Launcher {
             while(i++ < id) 
                 physReader.readLine();
 
-            myNode = new VirtualNode(
-                            id, physReader.readLine().split(":")
-                            );
-        
-            physReader.close();
+            neighbours = physReader.readLine();
+                
+                physReader.close();
+                
+            } catch (Exception e) {
+                System.err.println(e.getMessage());
+            }
 
-        } catch (Exception e) {
-            System.err.println(e.getMessage());
-        }
+        final VirtualNode myNode = new VirtualNode(id, neighbours.split(":"));
+
+        Runtime.getRuntime().addShutdownHook(new Thread(){
+            public void run() {
+                myNode.close();
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e){}
+            }
+        });
 
         String[] cmd;
         boolean loop = true;

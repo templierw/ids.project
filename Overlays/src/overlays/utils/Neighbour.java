@@ -1,13 +1,13 @@
-package overlays;
+package overlays.utils;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Neighbour {
 
-    int id;
-    AtomicBoolean isAlive;
-    AtomicInteger TTL;
+    public int id;
+    public AtomicBoolean isAlive;
+    public AtomicInteger TTL;
 
     public Neighbour(int id) {
         this.id = id;
