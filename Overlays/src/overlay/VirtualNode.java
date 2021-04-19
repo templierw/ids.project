@@ -18,7 +18,7 @@ public class VirtualNode extends Thread{
 
     public PhysicalNode physLayer;
 
-    public VirtualNode(int id, String[] physNeigh) {
+    public VirtualNode(int id, String[] physNeigh, boolean verbose) {
 
         this.id = id;
         this.nbNodes = physNeigh.length;
@@ -28,7 +28,7 @@ public class VirtualNode extends Thread{
         
         this.services = Executors.newFixedThreadPool(2);
 
-        this.physLayer = new PhysicalNode(id, physNeigh, recvBuff, sendBuff, true);
+        this.physLayer = new PhysicalNode(id, physNeigh, recvBuff, sendBuff, verbose);
         services.execute(this.physLayer);
 
         services.execute(new Runnable() {  

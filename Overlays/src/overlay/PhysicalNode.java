@@ -44,7 +44,8 @@ public class PhysicalNode extends Thread {
 
     public LinkedList<Neighbour> neigh;
 
-    public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, MessageBuffer downBuff, boolean verbose) {
+    public PhysicalNode(int id, String[] neighbours, MessageBuffer upBuff, 
+                        MessageBuffer downBuff, boolean verbose) {
 
         this.VERBOSE = verbose;
         if (this.VERBOSE)
@@ -146,75 +147,77 @@ public class PhysicalNode extends Thread {
                             Packet recvPck = unmarshallPacket(delivery.getBody());
 
                             switch (recvPck.type) {
-                            case TABLE:
-                                switch (table.updateTable(recvPck.from,(RoutingTable) recvPck.data)) {
-                                case ADDED:
-                                    mustGossip.release();
-                                    maxHost.addAndGet(table.lastAdded);
-                                    break;
-                                case UPDATED:
-                                    mustGossip.release();
-                                    break;
-                                case IGNORED:
-                                    break;
-                                case DELETED:
-                                    break;
-                                }
+                                case TABLE:
+                                    switch (table.updateTable(recvPck.from,(RoutingTable) recvPck.data)) {
+                                        case ADDED:
+                                            mustGossip.release();
+                                            maxHost.addAndGet(table.lastAdded);
+                                            break;
+                                        case UPDATED:
+                                            mustGossip.release();
+                                            break;
+                                        case IGNORED:
+                                            break;
+                                        case DELETED:
+                                            break;
+                                        }
 
-                                break;
+                                    break;
 
-                            case HELLO:
-                                if (VERBOSE)
-                                    pprint("receive 'hello' from" + recvPck.from, ShellColour.ANSI_PURPLE);
-                                table.resurrectRoute(recvPck.from);
-                                mustGossip.release();
-                                break;
-
-                            case MSG:
-                                if (recvPck.to == id)
-                                    upBuff.putMessage((Message) recvPck.data);
-
-                                else {
+                                case HELLO:
                                     if (VERBOSE)
-                                        pprint("routing from: " + recvPck.from + ", to: " + recvPck.to,
-                                                ShellColour.ANSI_BLUE);
-                                    try {
-                                        send(recvPck);
-                                    } catch (RouteException e) {
-                                        errprint(e.getMessage());
+                                        pprint("receive 'hello' from" + recvPck.from, ShellColour.ANSI_PURPLE);
+                                    table.resurrectRoute(recvPck.from);
+                                    Neighbour n = neigh.get(recvPck.from);
+                                    n.isAlive.set(true);
+                                    n.TTL.set(5);
+                                    mustGossip.release();
+                                    break;
+
+                                case MSG:
+                                    if (recvPck.to == id)
+                                        upBuff.putMessage((Message) recvPck.data);
+
+                                    else {
+                                        if (VERBOSE)
+                                            pprint("routing from: " + recvPck.from + ", to: " + recvPck.to,
+                                                    ShellColour.ANSI_BLUE);
+                                        try {
+                                            send(recvPck);
+                                        } catch (RouteException e) {
+                                            errprint(e.getMessage());
+                                        }
                                     }
-                                }
-                                break;
+                                    break;
 
-                            case BYE:
-                                if (recvPck.to == id) {
+                                case BYE:
+                                    if (recvPck.to == id) {
+                                        if (VERBOSE)
+                                            pprint("killing route for: " + recvPck.from, ShellColour.ANSI_YELLOW);
+                                        table.killRoute(recvPck.from);
+                                        mustGossip.release();
+
+                                    } else
+                                        send(recvPck);
+                                    break;
+
+                                case PING:
                                     if (VERBOSE)
-                                        pprint("killing route for: " + recvPck.from, ShellColour.ANSI_YELLOW);
-                                    table.killRoute(recvPck.from);
-                                    mustGossip.release();
+                                        pprint("received ping from: " + recvPck.from, ShellColour.ANSI_CYAN);
+                                    n = neigh.get(recvPck.from);
+                                    n.isAlive.set(true);
+                                    n.TTL.set(5);
+                                    if (table.isDeadRoute(n.id)) {
+                                        table.resurrectRoute(n.id);
+                                        mustGossip.release();
+                                    }
+                                    break;
 
-                                } else
-                                    send(recvPck);
-                                break;
-
-                            case PING:
-                                if (VERBOSE)
-                                    pprint("received ping from: " + recvPck.from, ShellColour.ANSI_CYAN);
-                                Neighbour n = neigh.get(recvPck.from);
-                                n.isAlive.set(true);
-                                n.TTL.set(5);
-                                if (table.isDeadRoute(n.id)) {
-                                    table.resurrectRoute(n.id);
-                                    mustGossip.release();
+                                default:
+                                    throw new PacketException("Invalid Packet Type");
                                 }
-                                break;
-
-                            default:
-                                throw new PacketException("Invalid Packet Type");
-                            }
 
                         } catch (Exception e) {
-                            pprint("ici1", ShellColour.ANSI_YELLOW);
                             errprint(e.getMessage());
                         }
                     };
@@ -236,7 +239,7 @@ public class PhysicalNode extends Thread {
                     for (Integer nidx : table.getNeighbours()) {
                         Neighbour n = neigh.get(nidx);
 
-                        if (n.TTL.decrementAndGet() == 0)
+                        if (n.TTL.decrementAndGet() <= 0)
                             n.isAlive.set(false);
 
                         try {
@@ -254,13 +257,16 @@ public class PhysicalNode extends Thread {
 
                     try {
                         Thread.sleep(2000);
+                        boolean updated = false;
                         for (Integer nidx : table.getNeighbours())
                             if (!neigh.get(nidx).isAlive.get()) {
                                 if (!table.isDeadRoute(nidx)) {
                                     table.killRoute(nidx);
-                                    mustGossip.release();
+                                    updated = true;
                                 }
                             }
+                        if(updated)    
+                            mustGossip.release();
                     } catch (Exception e) {
                         errprint(e.getMessage());
                     }

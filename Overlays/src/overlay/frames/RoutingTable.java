@@ -40,7 +40,6 @@ public class RoutingTable extends Sendable {
                 }
             }
         }
-        printTable();
     }
 
     public RouteStatus updateTable(int from, RoutingTable table) {
