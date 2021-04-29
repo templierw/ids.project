@@ -239,9 +239,10 @@ public class PhysicalNode extends Thread {
                     for (Integer nidx : table.getNeighbours()) {
                         Neighbour n = neigh.get(nidx);
 
-                        if (n.TTL.decrementAndGet() <= 0)
+                        if (n.TTL.decrementAndGet() <= 0) {
                             n.isAlive.set(false);
 
+                        }
                         try {
                             Packet pck = new Packet();
                             pck.type = PacketType.PING;
@@ -252,6 +253,7 @@ public class PhysicalNode extends Thread {
                         } catch (Exception e) {
                             errprint(e.getMessage());
                         }
+
 
                     }
 
